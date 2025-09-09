@@ -43,7 +43,7 @@ export default function App() {
 
       {/* View */}
       <div className="view">
-        {isPlain ? <Plain /> : <Globe />}
+        {isPlain ? <Plain stationUrl='geojson1/stations.json' title="Windborne Project" /> : <Globe />}
       </div>
     </div>
   );

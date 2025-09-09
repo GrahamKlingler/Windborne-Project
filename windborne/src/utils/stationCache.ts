@@ -1,5 +1,5 @@
 // stationCache.ts
-import { normalizeStationRecords } from './threeGeoJSON'; // or your own normalizer
+import { normalizeStationRecords } from "../globe_vis/threeGeoJSON"; // or your own normalizer
 export interface StationRecord {
   station_id: string;
   latitude: number;
@@ -13,7 +13,7 @@ export interface StationRecord {
 
 type CacheEntry = {
   data: StationRecord[];
-  ts: number;                   // when stored
+  ts: number; // when stored
   etag?: string;
   lastModified?: string;
 };
@@ -22,26 +22,33 @@ const memory = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<StationRecord[]>>();
 
 type Options = {
-  ttlMs?: number;               // default 6h
-  forceRefresh?: boolean;       // ignore cache
-  useETag?: boolean;            // try If-None-Match / If-Modified-Since
+  ttlMs?: number; // default 6h
+  forceRefresh?: boolean; // ignore cache
+  useETag?: boolean; // try If-None-Match / If-Modified-Since
 };
 
-const LS_PREFIX = 'stations:';
+const LS_PREFIX = "stations:";
 
 function loadLocal(url: string): CacheEntry | null {
   try {
     const raw = localStorage.getItem(LS_PREFIX + url);
     if (!raw) return null;
     return JSON.parse(raw) as CacheEntry;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function saveLocal(url: string, entry: CacheEntry) {
-  try { localStorage.setItem(LS_PREFIX + url, JSON.stringify(entry)); } catch {}
+  try {
+    localStorage.setItem(LS_PREFIX + url, JSON.stringify(entry));
+  } catch {}
 }
 
-export async function getStationsOnce(url: string, opts: Options = {}): Promise<StationRecord[]> {
+export async function getStationsOnce(
+  url: string,
+  opts: Options = {}
+): Promise<StationRecord[]> {
   const ttlMs = opts.ttlMs ?? 6 * 60 * 60 * 1000; // 6 hours
 
   // 1) fresh enough in-memory?
@@ -67,8 +74,8 @@ export async function getStationsOnce(url: string, opts: Options = {}): Promise<
   const p = (async () => {
     const headers: Record<string, string> = {};
     if (opts.useETag && local) {
-      if (local.etag) headers['If-None-Match'] = local.etag;
-      if (local.lastModified) headers['If-Modified-Since'] = local.lastModified;
+      if (local.etag) headers["If-None-Match"] = local.etag;
+      if (local.lastModified) headers["If-Modified-Since"] = local.lastModified;
     }
 
     try {
@@ -82,17 +89,22 @@ export async function getStationsOnce(url: string, opts: Options = {}): Promise<
       const raw: unknown = await res.json();
       const records = normalizeStationRecords(raw); // validate/shape → StationRecord[]
 
-      const etag = res.headers.get('ETag') ?? undefined;
-      const lastModified = res.headers.get('Last-Modified') ?? undefined;
+      const etag = res.headers.get("ETag") ?? undefined;
+      const lastModified = res.headers.get("Last-Modified") ?? undefined;
 
-      const entry: CacheEntry = { data: records, ts: Date.now(), etag, lastModified };
+      const entry: CacheEntry = {
+        data: records,
+        ts: Date.now(),
+        etag,
+        lastModified,
+      };
       memory.set(url, entry);
       saveLocal(url, entry);
       return records;
     } catch (e) {
       // On failure, fall back to any cached data we have
       if (local) {
-        console.warn('[getStationsOnce] network failed, using cached data:', e);
+        console.warn("[getStationsOnce] network failed, using cached data:", e);
         memory.set(url, local);
         return local.data;
       }

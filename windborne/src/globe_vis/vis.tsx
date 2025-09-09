@@ -1,12 +1,16 @@
-import React, { useEffect, useRef } from 'react';
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import React, { useEffect, useRef } from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 // If you already have these helpers in your project, keep the imports.
 // Otherwise, you can comment them out and add your own country/station drawing.
-import getStarfield from './getStarfield';
-import { getStationsOnce, type StationRecord } from './stationCache';
-import { drawThreeGeo, drawStationsRich, type StationPointsRich } from './threeGeoJSON';
+import getStarfield from "./getStarfield";
+import { getStationsOnce, type StationRecord } from "../utils/stationCache";
+import {
+  drawThreeGeo,
+  drawStationsRich,
+  type StationPointsRich,
+} from "./threeGeoJSON";
 
 // --- Types -----------------------------------------------------------------
 
@@ -28,8 +32,8 @@ export type GlobeStationsProps = {
 // --- Component -------------------------------------------------------------
 
 export default function GlobeStations({
-  stationUrl = '/geojson/station.json',
-  countriesUrl = '/geojson/countries.json',
+  stationUrl = "/geojson/station.json",
+  countriesUrl = "/geojson/countries.json",
   radius = 2,
   className,
   style,
@@ -62,15 +66,23 @@ export default function GlobeStations({
     // dynamic control speeds: slower when close, faster when far
     function updateControlSpeeds() {
       const d = camera.position.distanceTo(controls.target);
-      const t = THREE.MathUtils.smoothstep(d, controls.minDistance, controls.maxDistance);
+      const t = THREE.MathUtils.smoothstep(
+        d,
+        controls.minDistance,
+        controls.maxDistance
+      );
       controls.rotateSpeed = THREE.MathUtils.lerp(0.05, 0.9, t);
-      controls.zoomSpeed = THREE.MathUtils.lerp(0.30, 1.0, t);
+      controls.zoomSpeed = THREE.MathUtils.lerp(0.3, 1.0, t);
       controls.dampingFactor = THREE.MathUtils.lerp(0.15, 0.06, t);
     }
 
     // Wireframe outline of the globe
     const wireGeo = new THREE.SphereGeometry(radius);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.4,
+    });
     const edges = new THREE.EdgesGeometry(wireGeo, 1);
     const line = new THREE.LineSegments(edges, lineMat);
     scene.add(line);
@@ -90,7 +102,12 @@ export default function GlobeStations({
     // Invisible sphere used for occlusion testing (ray hits this before back-side points)
     const globeMesh = new THREE.Mesh(
       new THREE.SphereGeometry(radius, 64, 64),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.0, depthWrite: false })
+      new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.0,
+        depthWrite: false,
+      })
     );
     scene.add(globeMesh);
 
@@ -101,12 +118,16 @@ export default function GlobeStations({
       .then((data: any) => {
         try {
           // console.log(data);
-          countriesObj = drawThreeGeo({ json: data, radius, materialOptions: { color: 0xffffff } }) as THREE.Object3D;
+          countriesObj = drawThreeGeo({
+            json: data,
+            radius,
+            materialOptions: { color: 0xffffff },
+          }) as THREE.Object3D;
           scene.add(countriesObj);
           const { clientWidth: w, clientHeight: h } = container; // your mount div
           (countriesObj.userData as any).setResolution?.(w, h);
         } catch (e) {
-          console.warn('drawThreeGeo failed:', e);
+          console.warn("drawThreeGeo failed:", e);
         }
       })
       .catch(() => {});
@@ -129,23 +150,24 @@ export default function GlobeStations({
         scene.add(stations);
         console.log(`Loaded ${stations.userData.stations.length} stations`);
       } catch (e) {
-        console.error('Failed to load stations:', e);
+        console.error("Failed to load stations:", e);
       }
     })();
 
     // Tooltip overlay
-    const tooltip = document.createElement('div');
-    tooltip.style.position = 'absolute';
-    tooltip.style.background = 'rgba(0,0,0,0.8)';
-    tooltip.style.color = '#fff';
-    tooltip.style.padding = '6px 12px';
-    tooltip.style.borderRadius = '6px';
-    tooltip.style.pointerEvents = 'none';
-    tooltip.style.display = 'none';
-    tooltip.style.fontSize = '14px';
-    tooltip.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Arial';
-    tooltip.style.zIndex = '1000';
-    tooltip.style.border = '1px solid #333';
+    const tooltip = document.createElement("div");
+    tooltip.style.position = "absolute";
+    tooltip.style.background = "rgba(0,0,0,0.8)";
+    tooltip.style.color = "#fff";
+    tooltip.style.padding = "6px 12px";
+    tooltip.style.borderRadius = "6px";
+    tooltip.style.pointerEvents = "none";
+    tooltip.style.display = "none";
+    tooltip.style.fontSize = "14px";
+    tooltip.style.fontFamily =
+      "system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    tooltip.style.zIndex = "1000";
+    tooltip.style.border = "1px solid #333";
     container.appendChild(tooltip);
     tooltipRef.current = tooltip;
 
@@ -154,12 +176,19 @@ export default function GlobeStations({
     const mouse = new THREE.Vector2();
     const globeCenter = new THREE.Vector3(0, 0, 0);
 
-    function worldPerPixel(distance: number, cam: THREE.PerspectiveCamera, viewportH: number) {
-      return (2 * distance * Math.tan(THREE.MathUtils.degToRad(cam.fov * 0.5))) / viewportH;
+    function worldPerPixel(
+      distance: number,
+      cam: THREE.PerspectiveCamera,
+      viewportH: number
+    ) {
+      return (
+        (2 * distance * Math.tan(THREE.MathUtils.degToRad(cam.fov * 0.5))) /
+        viewportH
+      );
     }
 
     const pointPx = 1; // visual size in px
-    const pickPx = 1;  // hover radius in px
+    const pickPx = 1; // hover radius in px
 
     function updateSizesForZoom() {
       if (!stations) return;
@@ -190,10 +219,18 @@ export default function GlobeStations({
       const hits = raycaster.intersectObject(stations, false);
 
       // Hemisphere cull (front-facing only)
-      const camFromCenter = camera.position.clone().sub(globeCenter).normalize();
+      const camFromCenter = camera.position
+        .clone()
+        .sub(globeCenter)
+        .normalize();
       const filtered = hits.filter((hit) => {
-        const posAttr = stations!.geometry.getAttribute('position') as THREE.BufferAttribute;
-        const point = new THREE.Vector3().fromBufferAttribute(posAttr, hit.index!);
+        const posAttr = stations!.geometry.getAttribute(
+          "position"
+        ) as THREE.BufferAttribute;
+        const point = new THREE.Vector3().fromBufferAttribute(
+          posAttr,
+          hit.index!
+        );
         stations!.localToWorld(point);
         const pointFromCenter = point.sub(globeCenter).normalize();
         return camFromCenter.dot(pointFromCenter) > 0.0;
@@ -205,19 +242,19 @@ export default function GlobeStations({
 
         // If the globe is in front, ignore the point
         if (nearestGlobe && nearestGlobe.distance + 1e-3 < hit.distance) {
-          tooltip.style.display = 'none';
+          tooltip.style.display = "none";
           return;
         }
 
         const idx = hit.index!;
         const rec = stations.userData.stations[idx];
 
-        tooltip.style.display = 'block';
+        tooltip.style.display = "block";
         tooltip.textContent = [
           rec.station_id,
-          rec.station_name ? `— ${rec.station_name}` : '',
-          rec.station_network ? ` (${rec.station_network})` : ''
-        ].join('');
+          rec.station_name ? `— ${rec.station_name}` : "",
+          rec.station_network ? ` (${rec.station_network})` : "",
+        ].join("");
 
         let left = ev.clientX + 15;
         let top = ev.clientY - 30;
@@ -228,12 +265,13 @@ export default function GlobeStations({
         return;
       }
 
-      tooltip.style.display = 'none';
+      tooltip.style.display = "none";
     }
 
-    renderer.domElement.addEventListener('pointermove', onPointerMove);
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
 
-    let downXY = { x: 0, y: 0 }, isDragging = false;
+    let downXY = { x: 0, y: 0 },
+      isDragging = false;
     function onPointerDown(ev: PointerEvent) {
       downXY = { x: ev.clientX, y: ev.clientY };
       isDragging = false;
@@ -255,9 +293,14 @@ export default function GlobeStations({
 
       // pick a point
       const hits = raycaster.intersectObject(stations, false);
-      const camFromCenter = camera.position.clone().sub(new THREE.Vector3(0,0,0)).normalize();
+      const camFromCenter = camera.position
+        .clone()
+        .sub(new THREE.Vector3(0, 0, 0))
+        .normalize();
       const filtered = hits.filter((hit) => {
-        const posAttr = stations!.geometry.getAttribute('position') as THREE.BufferAttribute;
+        const posAttr = stations!.geometry.getAttribute(
+          "position"
+        ) as THREE.BufferAttribute;
         const p = new THREE.Vector3().fromBufferAttribute(posAttr, hit.index!);
         stations!.localToWorld(p);
         const pointFromCenter = p.normalize(); // center at origin
@@ -279,9 +322,9 @@ export default function GlobeStations({
     }
 
     // add listeners
-    renderer.domElement.addEventListener('pointerdown', onPointerDown);
-    renderer.domElement.addEventListener('pointermove', onPointerMove);
-    renderer.domElement.addEventListener('pointerup', onPointerUp);
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
 
     // Resize handling
     function onResize() {
@@ -289,7 +332,10 @@ export default function GlobeStations({
       camera.aspect = clientWidth / clientHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(clientWidth, clientHeight);
-      (countriesObj?.userData as any)?.setResolution?.(clientWidth, clientHeight);
+      (countriesObj?.userData as any)?.setResolution?.(
+        clientWidth,
+        clientHeight
+      );
     }
     const resizeObserver = new ResizeObserver(onResize);
     resizeObserver.observe(container);
@@ -309,10 +355,10 @@ export default function GlobeStations({
     return () => {
       cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
-      renderer.domElement.removeEventListener('pointermove', onPointerMove);
-      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
-      renderer.domElement.removeEventListener('pointermove', onPointerMove);
-      renderer.domElement.removeEventListener('pointerup', onPointerUp);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
       tooltip.remove();
 
       // Dispose
@@ -320,7 +366,10 @@ export default function GlobeStations({
         if ((obj as THREE.Mesh).geometry) {
           (obj as THREE.Mesh).geometry.dispose?.();
         }
-        const mat = (obj as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+        const mat = (obj as THREE.Mesh).material as
+          | THREE.Material
+          | THREE.Material[]
+          | undefined;
         if (mat) {
           if (Array.isArray(mat)) mat.forEach((m) => m.dispose?.());
           else mat.dispose?.();
@@ -332,7 +381,5 @@ export default function GlobeStations({
     };
   }, [countriesUrl, stationUrl, radius]);
 
-  return (
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-  );
+  return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }

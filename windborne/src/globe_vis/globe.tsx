@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import GlobeStations from './vis.tsx';
-import StationDialog from './stationDialog.tsx';
+import StationDialog from '../utils/stationDialog.tsx';
 
 type DatasetOption = {
   label: string;
@@ -19,8 +19,6 @@ export default function App() {
     const [selected, setSelected] = useState<{ id: string } | null>(null);
 
       const makeUrl = useCallback((id: string) => {
-        // TODO: change to your real endpoint
-        // Example: return `https://api.example.com/stations/${encodeURIComponent(id)}/points`;
         return `https://sfc.windbornesystems.com/historical_weather?station=${id}`;
   }, []);
   // Optional: allow the user to upload their own files
@@ -77,7 +75,7 @@ export default function App() {
       {/* Globe */}
       <GlobeStations
         countriesUrl={countriesUrl}
-        stationUrl='https://sfc.windbornesystems.com/stations'
+        stationUrl= '/geojson1/stations.json'//'https://sfc.windbornesystems.com/stations'
         radius={2}
         onStationClick={({ id }) => setSelected({ id })}
       />
