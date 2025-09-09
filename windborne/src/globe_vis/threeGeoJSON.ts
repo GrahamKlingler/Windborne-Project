@@ -7,6 +7,50 @@ import { Line2 } from 'three/addons/lines/Line2.js';
 // Types
 // ---------------------------------------------------------------------------
 
+// Full station record you showed
+export interface StationRecord {
+  station_id: string;
+  latitude: number;
+  longitude: number;
+  elevation?: number | null;
+  station_name?: string;
+  station_network?: string;
+  timezone?: string;
+  [k: string]: unknown;
+}
+
+export type StationPointsRich = THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> & {
+  userData: { stations: StationRecord[]; idToIndex: Map<string, number> };
+};
+
+// Accept several input shapes and normalize to StationRecord[]
+export function normalizeStationRecords(input: unknown): StationRecord[] {
+  // Case A: already an array of rich station dicts
+  if (Array.isArray(input) && input.every(o =>
+      o && typeof o === 'object' &&
+      typeof (o as any).station_id === 'string' &&
+      Number.isFinite((o as any).latitude) &&
+      Number.isFinite((o as any).longitude)
+  )) {
+    // shallow copy to satisfy type
+    return (input as StationRecord[]).map(s => ({ ...s }));
+  }
+
+  // Case B: Record<string, [lat, lon]>
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
+    const obj = input as Record<string, unknown>;
+    const entries = Object.entries(obj);
+    if (entries.every(([, v]) => Array.isArray(v) && v.length === 2 && Number.isFinite((v as any)[0]) && Number.isFinite((v as any)[1]))) {
+      return entries.map(([id, v]) => {
+        const [lat, lon] = v as [number, number];
+        return { station_id: id, latitude: lat, longitude: lon };
+      });
+    }
+  }
+
+  throw new Error('[normalizeStationRecords] Unsupported stations JSON shape');
+}
+
 export type StationData = Record<string, [number, number]>; // { id: [lat, lon] }
 
 export type StationPoints = THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> & {
@@ -104,6 +148,49 @@ export function createCircleTexture(size = 32): THREE.Texture {
 // ---------------------------------------------------------------------------
 // Stations
 // ---------------------------------------------------------------------------
+
+export function drawStationsRich(params: {
+  records: StationRecord[];
+  radius: number;
+  materialOptions?: THREE.PointsMaterialParameters;
+}): StationPointsRich {
+  const { records, radius, materialOptions } = params;
+
+  const positions: number[] = [];
+  const clean: StationRecord[] = [];
+
+  for (const s of records) {
+    const lat = Number(s.latitude), lon = Number(s.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) { console.warn('skip invalid station', s); continue; }
+    const [x, y, z] = latLonToXYZ(lat, lon, radius);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) { console.warn('projection fail', s); continue; }
+    positions.push(x, y, z);
+    clean.push(s);
+  }
+
+  if (positions.length === 0) throw new Error('[drawStationsRich] No valid station positions');
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+
+  const material = new THREE.PointsMaterial({
+    size: 0.02,
+    color: 0x9ce0f7,
+    sizeAttenuation: true,
+    map: createCircleTexture(),
+    alphaTest: 0.5,
+    transparent: true,
+    ...(materialOptions ?? {}),
+  });
+
+  const points = new THREE.Points(geometry, material) as StationPointsRich;
+  points.userData = {
+    stations: clean,
+    idToIndex: new Map(clean.map((s, i) => [s.station_id, i])),
+  };
+  points.rotation.x = -Math.PI * 0.5;
+  return points;
+}
 
 export function drawStations({ json, radius, materialOptions }: DrawStationsParams): StationPoints {
   const ids: string[] = [];

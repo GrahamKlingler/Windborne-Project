@@ -5,15 +5,16 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 // If you already have these helpers in your project, keep the imports.
 // Otherwise, you can comment them out and add your own country/station drawing.
 import getStarfield from './getStarfield';
-import { drawThreeGeo, drawStations } from './threeGeoJSON';
+import { getStationsOnce, type StationRecord } from './stationCache';
+import { drawThreeGeo, drawStationsRich, type StationPointsRich } from './threeGeoJSON';
 
 // --- Types -----------------------------------------------------------------
 
-type StationData = Record<string, [number, number]>; // { id: [lat, lon] }
+// type StationData = Record<string, [number, number]>; // { id: [lat, lon] }
 
-type StationPoints = THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> & {
-  userData: { stationIds: string[] };
-};
+// type StationPoints = THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> & {
+//   userData: { stationIds: string[] };
+// };
 
 export type GlobeStationsProps = {
   stationUrl?: string; // e.g. '/geojson/station.json'
@@ -21,6 +22,7 @@ export type GlobeStationsProps = {
   radius?: number; // globe radius in world units
   className?: string;
   style?: React.CSSProperties;
+  onStationClick?: (info: { id: string; index: number }) => void;
 };
 
 // --- Component -------------------------------------------------------------
@@ -31,6 +33,7 @@ export default function GlobeStations({
   radius = 2,
   className,
   style,
+  onStationClick,
 }: GlobeStationsProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
@@ -109,15 +112,26 @@ export default function GlobeStations({
       .catch(() => {});
 
     // Stations (uses your helper)
-    let stations: StationPoints | null = null;
-    fetch(stationUrl)
-      .then((r) => r.json())
-      .then((data: StationData) => {
-        // console.log(data);
-        stations = drawStations({ json: data, radius, materialOptions: { color: 0x9ce0f7 } }) as StationPoints;
+    let stations: StationPointsRich | null = null;
+    let cancelled = false;
+    (async () => {
+      try {
+        const records: StationRecord[] = await getStationsOnce(stationUrl, {
+          ttlMs: 6 * 60 * 60 * 1000,
+          useETag: true,
+        });
+        if (cancelled) return;
+        stations = drawStationsRich({
+          records,
+          radius,
+          materialOptions: { color: 0x9ce0f7 },
+        });
         scene.add(stations);
-      })
-      .catch(() => {});
+        console.log(`Loaded ${stations.userData.stations.length} stations`);
+      } catch (e) {
+        console.error('Failed to load stations:', e);
+      }
+    })();
 
     // Tooltip overlay
     const tooltip = document.createElement('div');
@@ -162,6 +176,9 @@ export default function GlobeStations({
       const rect = renderer.domElement.getBoundingClientRect();
       mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      if (Math.hypot(ev.clientX - downXY.x, ev.clientY - downXY.y) > 5) {
+        isDragging = true;
+      }
 
       raycaster.setFromCamera(mouse, camera);
 
@@ -193,10 +210,14 @@ export default function GlobeStations({
         }
 
         const idx = hit.index!;
-        const id = stations.userData.stationIds[idx];
+        const rec = stations.userData.stations[idx];
 
         tooltip.style.display = 'block';
-        tooltip.textContent = `Station: ${id}`;
+        tooltip.textContent = [
+          rec.station_id,
+          rec.station_name ? `— ${rec.station_name}` : '',
+          rec.station_network ? ` (${rec.station_network})` : ''
+        ].join('');
 
         let left = ev.clientX + 15;
         let top = ev.clientY - 30;
@@ -211,6 +232,56 @@ export default function GlobeStations({
     }
 
     renderer.domElement.addEventListener('pointermove', onPointerMove);
+
+    let downXY = { x: 0, y: 0 }, isDragging = false;
+    function onPointerDown(ev: PointerEvent) {
+      downXY = { x: ev.clientX, y: ev.clientY };
+      isDragging = false;
+    }
+
+    async function onPointerUp(ev: PointerEvent) {
+      if (isDragging) return; // treat as orbit, not a click
+      if (!stations) return;
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+
+      // occlude with globe mesh (you already have this in hover)
+      const globeHits = raycaster.intersectObject(globeMesh, true);
+      const nearestGlobe = globeHits.length ? globeHits[0] : null;
+
+      // pick a point
+      const hits = raycaster.intersectObject(stations, false);
+      const camFromCenter = camera.position.clone().sub(new THREE.Vector3(0,0,0)).normalize();
+      const filtered = hits.filter((hit) => {
+        const posAttr = stations!.geometry.getAttribute('position') as THREE.BufferAttribute;
+        const p = new THREE.Vector3().fromBufferAttribute(posAttr, hit.index!);
+        stations!.localToWorld(p);
+        const pointFromCenter = p.normalize(); // center at origin
+        return camFromCenter.dot(pointFromCenter) > 0.0;
+      });
+      if (!filtered.length) return;
+
+      filtered.sort((a, b) => a.distance - b.distance);
+      const hit = filtered[0];
+      if (nearestGlobe && nearestGlobe.distance + 1e-3 < hit.distance) return;
+
+      const idx = hit.index!;
+      const id = (stations.userData as any).stationIds
+        ? (stations.userData as any).stationIds[idx]
+        : (stations.userData as any).stations?.[idx]?.station_id;
+
+      // fire the callback
+      if (id && onStationClick) onStationClick({ id, index: idx });
+    }
+
+    // add listeners
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    renderer.domElement.addEventListener('pointermove', onPointerMove);
+    renderer.domElement.addEventListener('pointerup', onPointerUp);
 
     // Resize handling
     function onResize() {
@@ -239,6 +310,9 @@ export default function GlobeStations({
       cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      renderer.domElement.removeEventListener('pointermove', onPointerMove);
+      renderer.domElement.removeEventListener('pointerup', onPointerUp);
       tooltip.remove();
 
       // Dispose
@@ -258,12 +332,7 @@ export default function GlobeStations({
     };
   }, [countriesUrl, stationUrl, radius]);
 
-  return React.createElement(
-    'div',
-    {
-      ref: containerRef,
-      className: className,
-      style: { position: 'relative', width: '100%', height: '100%', ...style }
-    }
+  return (
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
   );
 }

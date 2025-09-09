@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import GlobeStations from './vis';
+import React, { useEffect, useCallback, useMemo, useState } from 'react';
+import GlobeStations from './vis.tsx';
+import StationDialog from './stationDialog.tsx';
 
 type DatasetOption = {
   label: string;
@@ -15,7 +16,13 @@ const DATASETS: DatasetOption[] = [
 
 export default function App() {
     const [datasetIdx, setDatasetIdx] = useState(0);
+    const [selected, setSelected] = useState<{ id: string } | null>(null);
 
+      const makeUrl = useCallback((id: string) => {
+        // TODO: change to your real endpoint
+        // Example: return `https://api.example.com/stations/${encodeURIComponent(id)}/points`;
+        return `https://sfc.windbornesystems.com/historical_weather?station=${id}`;
+  }, []);
   // Optional: allow the user to upload their own files
   const [countriesBlobUrl, setCountriesBlobUrl] = useState<string | null>(null);
 
@@ -38,13 +45,6 @@ export default function App() {
     setDatasetIdx(Number(e.target.value));
     // Clear custom uploads when switching presets (optional)
     setCountriesBlobUrl(null);
-  }
-
-  function onCountriesFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (countriesBlobUrl) URL.revokeObjectURL(countriesBlobUrl);
-    setCountriesBlobUrl(URL.createObjectURL(f));
   }
 
   return (
@@ -77,9 +77,17 @@ export default function App() {
       {/* Globe */}
       <GlobeStations
         countriesUrl={countriesUrl}
-        stationUrl='/geojson/station.json'
+        stationUrl='https://sfc.windbornesystems.com/stations'
         radius={2}
+        onStationClick={({ id }) => setSelected({ id })}
       />
+      {selected && (
+        <StationDialog
+          stationId={selected.id}
+          makeUrl={makeUrl}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   );
 }
