@@ -1,80 +1,73 @@
-// StationDialog.tsx
 import { useEffect, useMemo, useState } from 'react';
+import { getDataOnce, type DataRecord } from './dataCache';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 
-type PointsResponse = {
-  points: Array<Record<string, unknown>>;
-};
-
 export type StationDialogProps = {
   stationId: string;
-  makeUrl: (id: string) => string;   // e.g. (id) => `/api/stations/${id}/points`
+  stationName: string;
+  /** (optional) no longer used when caching; kept for backward compatibility */
+  makeUrl?: (id: string) => string;
   onClose: () => void;
+  /** override cache TTL if you want (defaults to 6h) */
+  ttlMs?: number;
 };
 
-export default function StationDialog({ stationId, makeUrl, onClose }: StationDialogProps) {
-  const [raw, setRaw] = useState<PointsResponse | null>(null);
+export default function StationDialog({
+  stationId,
+  stationName,
+  onClose,
+  ttlMs = 6 * 60 * 60 * 1000, // 6 hours
+}: StationDialogProps) {
+  const [rec, setRec] = useState<DataRecord | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // fetch once per stationId
+  // Pull from cache (in-memory + localStorage, with ETag if available)
   useEffect(() => {
     let cancelled = false;
-    setLoading(true); setErr(null);
-    fetch(makeUrl(stationId))
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((json: unknown) => {
-        if (cancelled) return;
-        // very light validation
-        const ok = !!json && typeof json === 'object' && Array.isArray((json as any).points);
-        if (!ok) throw new Error('Malformed response: expected { points: [...] }');
-        setRaw(json as PointsResponse);
-      })
-      .catch(e => !cancelled && setErr(String(e)))
-      .finally(() => !cancelled && setLoading(false));
+    setLoading(true);
+    setErr(null);
+
+    getDataOnce(stationId, { ttlMs, useETag: true })
+      .then((data) => { if (!cancelled) setRec(data); })
+      .catch((e) => { if (!cancelled) setErr(String(e)); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
     return () => { cancelled = true; };
-  }, [stationId, makeUrl]);
+  }, [stationId, ttlMs]);
 
-  // normalize → Recharts-friendly
-  const { data, seriesKeys, timeKey } = useMemo(() => {
-    const empty = { data: [] as any[], seriesKeys: [] as string[], timeKey: 'time' };
-    if (!raw?.points?.length) return empty;
+  // Prepare Recharts rows: t (ms) + numeric fields
+  const { rows, seriesKeys } = useMemo(() => {
+    if (!rec?.points?.length) return { rows: [] as any[], seriesKeys: [] as string[] };
 
-    // find a time key we recognize
-    const timeCandidates = ['timestamp', 'time', 'ts', 'date'];
-    const tk = timeCandidates.find(k => k in raw.points[0]) ?? timeCandidates[0];
+    // collect numeric keys from the normalized points (timestamp is ISO string)
+    const keySet = new Set<string>();
+    for (const p of rec.points) {
+      for (const [k, v] of Object.entries(p)) {
+        if (k === 'timestamp') continue;
+        if (typeof v === 'number' && Number.isFinite(v)) keySet.add(k);
+      }
+    }
+    const keys = [...keySet];
 
-    // collect numeric keys present in most rows (ignore the time key)
-    const allKeys = new Set<string>();
-    for (const p of raw.points) for (const k of Object.keys(p)) allKeys.add(k);
-    const numericKeys = [...allKeys].filter(k => k !== tk);
-
-    // build rows
-    const rows = raw.points
-      .map(p => {
-        const tRaw = (p as any)[tk];
-        const t = typeof tRaw === 'string' || typeof tRaw === 'number'
-          ? new Date(tRaw as any)
-          : null;
-        if (!(t instanceof Date) || Number.isNaN(t.getTime())) return null;
+    const rows = rec.points
+      .map((p) => {
+        const t = Date.parse(p.timestamp);
+        if (!Number.isFinite(t)) return null;
         const row: any = { t };
-        for (const k of numericKeys) {
+        for (const k of keys) {
           const v = (p as any)[k];
           row[k] = (typeof v === 'number' && Number.isFinite(v)) ? v : null;
         }
         return row;
       })
-      .filter(Boolean) as Array<Record<string, any>>;
+      .filter(Boolean)
+      .sort((a, b) => a.t - b.t);
 
-    // sort by time
-    rows.sort((a, b) => (a.t as Date).getTime() - (b.t as Date).getTime());
-
-    // keep only keys that have at least one numeric value
-    const keep = numericKeys.filter(k => rows.some(r => typeof r[k] === 'number'));
-    return { data: rows, seriesKeys: keep, timeKey: tk };
-  }, [raw]);
+    return { rows, seriesKeys: keys };
+  }, [rec]);
 
   return (
     <div
@@ -103,13 +96,15 @@ export default function StationDialog({ stationId, makeUrl, onClose }: StationDi
           gridTemplateRows: '48px 1fr',
           overflow: 'hidden',
         }}
-        onClick={e => e.stopPropagation()} // prevent backdrop click
+        onClick={e => e.stopPropagation()}
       >
         <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', gap: 12, borderBottom: '1px solid #222' }}>
           <strong style={{ fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial' }}>
-            Station {stationId}
+            {stationName} (ID: {stationId})
           </strong>
-          <div style={{ opacity: 0.7, fontSize: 12 }}>Plotting all numeric fields over time {loading ? '…' : ''}</div>
+          <div style={{ opacity: 0.7, fontSize: 12 }}>
+            Plotting all numeric fields over time {loading ? '…' : ''}
+          </div>
           <button
             onClick={onClose}
             style={{
@@ -125,28 +120,29 @@ export default function StationDialog({ stationId, makeUrl, onClose }: StationDi
           {err && <div style={{ color: '#ff8a8a' }}>{err}</div>}
           {!err && (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data}>
+              <LineChart data={rows}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="t"
-                  tickFormatter={(v: any) => new Date(v).toLocaleString()}
+                  tickFormatter={(v: number) => new Date(v).toLocaleString()}
                   type="number"
                   domain={['auto', 'auto']}
                   scale="time"
                 />
                 <YAxis />
                 <Tooltip
-                  labelFormatter={(v: any) => new Date(v).toLocaleString()}
+                  labelFormatter={(v: number) => new Date(v).toLocaleString()}
                   contentStyle={{
-                    background: '#3a3a3a',   // gray background
+                    background: '#3a3a3a',
                     border: '1px solid #555',
                     borderRadius: 8,
-                    color: '#f0f0f0',        // text color inside
+                    color: '#f0f0f0',
                     boxShadow: '0 6px 24px rgba(0,0,0,0.35)',
                   }}
-                  labelStyle={{ color: '#40b1fbff' }}
+                  labelStyle={{ color: '#ddd' }}
                   itemStyle={{ color: '#eee' }}
                   wrapperStyle={{ outline: 'none', zIndex: 1001 }}
+                  cursor={{ fill: 'rgba(180,180,180,0.08)' }}
                 />
                 <Legend />
                 {seriesKeys.map((k) => (

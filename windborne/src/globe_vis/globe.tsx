@@ -16,7 +16,7 @@ const DATASETS: DatasetOption[] = [
 
 export default function App() {
     const [datasetIdx, setDatasetIdx] = useState(0);
-    const [selected, setSelected] = useState<{ id: string } | null>(null);
+    const [selected, setSelected] = useState<{ id: string, name: string } | null>(null);
 
       const makeUrl = useCallback((id: string) => {
         return `https://sfc.windbornesystems.com/historical_weather?station=${id}`;
@@ -77,11 +77,12 @@ export default function App() {
         countriesUrl={countriesUrl}
         stationUrl= '/geojson1/stations.json'//'https://sfc.windbornesystems.com/stations'
         radius={2}
-        onStationClick={({ id }) => setSelected({ id })}
+        onStationClick={({ id, name }) => setSelected({ id, name })}
       />
       {selected && (
         <StationDialog
           stationId={selected.id}
+          stationName={selected.name}
           makeUrl={makeUrl}
           onClose={() => setSelected(null)}
         />

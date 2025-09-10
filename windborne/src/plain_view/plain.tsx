@@ -28,7 +28,7 @@ export default function Plain({
 
   // Viewing States
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [viewId, setViewId] = useState<string | null>(null);
+  const [viewId, setViewId] = useState<{ id: string, name: string } | null>(null);
   const [showMulti, setShowMulti] = useState(false);
 
   useEffect(() => {
@@ -82,7 +82,7 @@ export default function Plain({
   const clearSelection = useCallback(() => setSelectedIds([]), []);
 
   return (
-    <div style={{ background: "#0f0f12" }}>
+    <div style={{ background: "#0f0f12", minHeight: "100vh" }}>
       
       <div style={{ display: "grid", gridTemplateRows: "auto auto 1fr"}}>
         {/* Title */}
@@ -231,7 +231,7 @@ export default function Plain({
 
                             <div style={{ display: "flex", gap: 8 }}>
                             <button
-                                onClick={() => setViewId(rec.station_id)}
+                                onClick={() => setViewId({id: rec.station_id, name: rec.station_name ?? ""})}
                                 style={{
                                 background: "#2c62ff",
                                 color: "#fff",
@@ -276,7 +276,8 @@ export default function Plain({
       {/* Single-station dialog (reuses the globe’s modal) */}
       {viewId && (
         <StationDialog
-          stationId={viewId}
+          stationId={viewId.id}
+          stationName={viewId.name}
           makeUrl={makePointsUrl}
           onClose={() => setViewId(null)}
         />

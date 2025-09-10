@@ -26,7 +26,7 @@ export type GlobeStationsProps = {
   radius?: number; // globe radius in world units
   className?: string;
   style?: React.CSSProperties;
-  onStationClick?: (info: { id: string; index: number }) => void;
+  onStationClick?: (info: { id: string; name: string; index: number }) => void;
 };
 
 // --- Component -------------------------------------------------------------
@@ -317,8 +317,12 @@ export default function GlobeStations({
         ? (stations.userData as any).stationIds[idx]
         : (stations.userData as any).stations?.[idx]?.station_id;
 
+      const name = (stations.userData as any).stationIds
+        ? (stations.userData as any).stationIds[idx]
+        : (stations.userData as any).stations?.[idx]?.station_name;
+
       // fire the callback
-      if (id && onStationClick) onStationClick({ id, index: idx });
+      if (id && onStationClick) onStationClick({ id, name, index: idx });
     }
 
     // add listeners

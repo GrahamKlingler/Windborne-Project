@@ -27,6 +27,7 @@ export default function SelectionSidebar({
         width:'100%',
         height: "auto",
         maxHeight: "80vh",
+        minHeight: "80vh",
         background: "#0f0f12",
         color: "#e6e6e6",
         gridTemplateColumns: "1fr 8fr 1fr",
