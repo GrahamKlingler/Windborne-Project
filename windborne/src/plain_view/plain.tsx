@@ -3,6 +3,7 @@ import SelectionSidebar from "./selectionSidebar";
 import StationDialog from "../utils/stationDialog";
 import { getStationsOnce, type StationRecord } from "../utils/stationCache";
 import MultiStationDialog from "../utils/MultiStationDialog";
+import { useStationSearch } from "../utils/searchStation";
 
 export type PlainProps = {
   stationUrl?: string;
@@ -22,55 +23,56 @@ export default function Plain({
 }: PlainProps) {
   // Searching States
   const [query, setQuery] = useState("");
-  const [stations, setStations] = useState<StationRecord[] | null>(null);
+  const { hits, loading } = useStationSearch(query);
+  // const [stations, setStations] = useState<StationRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  // const [loading, setLoading] = useState<boolean>(true);
 
   // Viewing States
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [viewId, setViewId] = useState<{ id: string, name: string } | null>(null);
   const [showMulti, setShowMulti] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    getStationsOnce(stationUrl, { ttlMs: 6 * 60 * 60 * 1000, useETag: true })
-      .then((recs) => {
-        if (!cancelled) setStations(recs);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(String(e));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [stationUrl]);
+  // useEffect(() => {
+  //   let cancelled = false;
+  //   // setLoading(true);
+  //   setError(null);
+  //   getStationsOnce(stationUrl, { ttlMs: 6 * 60 * 60 * 1000, useETag: true })
+  //     .then((recs) => {
+  //       if (!cancelled) setStations(recs);
+  //     })
+  //     .catch((e) => {
+  //       if (!cancelled) setError(String(e));
+  //     })
+  //     .finally(() => {
+  //       if (!cancelled) setLoading(false);
+  //     });
+  //   return () => {
+  //     cancelled = true;
+  //   };
+  // }, [stationUrl]);
 
-  // Build a simple search index (id + name + timezone, lowercased)
-  const indexed = useMemo(() => {
-    if (!stations) return [] as Array<{ rec: StationRecord; hay: string }>;
-    return stations.map((rec) => ({
-      rec,
-      hay: [rec.station_id, rec.station_name, rec.timezone]
-        .filter(Boolean)
-        .map((s) => String(s).toLowerCase())
-        .join(" \u2002 "), // thin spaces between fields
-    }));
-  }, [stations]);
+  // // Build a simple search index (id + name + timezone, lowercased)
+  // const indexed = useMemo(() => {
+  //   if (!stations) return [] as Array<{ rec: StationRecord; hay: string }>;
+  //   return stations.map((rec) => ({
+  //     rec,
+  //     hay: [rec.station_id, rec.station_name, rec.timezone]
+  //       .filter(Boolean)
+  //       .map((s) => String(s).toLowerCase())
+  //       .join(" \u2002 "), // thin spaces between fields
+  //   }));
+  // }, [stations]);
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return indexed;
-    return indexed.filter(({ hay }) => hay.includes(q));
-  }, [indexed, query]);
+  // const results = useMemo(() => {
+  //   const q = query.trim().toLowerCase();
+  //   if (!q) return indexed;
+  //   return indexed.filter(({ hay }) => hay.includes(q));
+  // }, [indexed, query]);
 
   const selectedRecords = useMemo(
-    () => (stations ?? []).filter((s) => selectedIds.includes(s.station_id)),
-    [stations, selectedIds]
+    () => (hits ?? []).filter((s) => selectedIds.includes(s.station_id)),
+    [hits, selectedIds]
   );
 
   const addToSelection = useCallback((id: string) => {
@@ -185,10 +187,10 @@ export default function Plain({
                 )}
                 {!loading && !error && (
                 <>
-                    <div style={{ color: "#9aa", padding: "8px 4px" }}>
+                    {/* <div style={{ color: "#9aa", padding: "8px 4px" }}>
                     {results.length} result{results.length !== 1 ? "s" : ""}{" "}
                     {query ? `for “${query}”` : ""}
-                    </div>
+                    </div> */}
                     <div style={{ display: "grid", gap: 8, maxHeight: '80vh' }}>
                     {results.map(({ rec }) => {
                         const added = selectedIds.includes(rec.station_id);

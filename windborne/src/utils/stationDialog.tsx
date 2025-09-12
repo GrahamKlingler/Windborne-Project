@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getDataOnce, type DataRecord } from './dataCache';
+import { getDataOnce } from './dataCache';
+import { type DataRecord } from './api';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from 'recharts';

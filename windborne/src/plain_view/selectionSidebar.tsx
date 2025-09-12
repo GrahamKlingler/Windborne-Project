@@ -1,8 +1,9 @@
 import React from "react";
 import type { StationRecord } from "../utils/stationCache";
+import type { Station } from "../utils/api";
 
 export type SelectionSidebarProps = {
-  selected: StationRecord[];
+  selected: Station[];
   onRemove: (id: string) => void;
   onClear: () => void;
   onViewSelection: () => void;

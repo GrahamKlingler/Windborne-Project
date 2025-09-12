@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { getDataOnce, type DataRecord } from './dataCache';
+import { getDataOnce } from './dataCache';
+import { type DataRecord } from './api';
+import { getCompareOnce } from './compareCache';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
@@ -114,35 +116,77 @@ export default function MultiStationDialog({ stationIds, onClose, ttlMs = 6 * 60
     let cancelled = false;
     setLoading(true); setErr(null);
 
-    (async () => {
-      try {
-        const ids = [...new Set(stationIds)];
-        const recs = await Promise.all(ids.map(id => getDataOnce(id, { ttlMs, useETag: true })));
-        if (cancelled) return;
+    if (selectedStations.length > 1) {
+      const res = await getCompareOnce({
+        stationIds: selectedStations,
+        vars: selectedVars,        // or undefined for all
+        start, end, resample       // optional filters
+      });
+      // res.points is already merged on timestamp with keys like `${id}:var`
+    } else if (selectedStations.length === 1) {
+      const rec = await getDataOnce(selectedStations[0]);
+      const ids = [...new Set(stationIds)];
+      // build series like before from rec.points
+      if (cancelled) return;
 
-        const map: Record<string, DataRecord> = {};
-        ids.forEach((id, i) => { map[id] = recs[i]; });
-        setDataById(map);
+          const map: Record<string, DataRecord> = {};
+          ids.forEach((id, i) => { map[id] = recs[i]; });
+          setDataById(map);
 
-        // discover all numeric variables across all stations; exclude 'timestamp'
-        const varSet = new Set<string>();
-        for (const r of Object.values(map)) {
-          for (const p of (r.points ?? [])) {
-            for (const [k, v] of Object.entries(p)) {
-              if (k === 'timestamp') continue;
-              if (typeof v === 'number' && Number.isFinite(v)) varSet.add(k);
+          // discover all numeric variables across all stations; exclude 'timestamp'
+          const varSet = new Set<string>();
+          for (const r of Object.values(map)) {
+            for (const p of (r.points ?? [])) {
+              for (const [k, v] of Object.entries(p)) {
+                if (k === 'timestamp') continue;
+                if (typeof v === 'number' && Number.isFinite(v)) varSet.add(k);
+              }
             }
           }
+          const all = [...varSet].sort();
+          setSelectedVars(all); // default to all vars
+          setSelectedStations(ids); // default to all stations
         }
-        const all = [...varSet].sort();
-        setSelectedVars(all); // default to all vars
-        setSelectedStations(ids); // default to all stations
-      } catch (e: any) {
-        setErr(String(e?.message ?? e));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+        (async () => {
+          if (selectedStations.length > 1) {
+            const res = await getCompareOnce({
+              stationIds: selectedStations,
+              vars: selectedVars,        // or undefined for all
+              // start, end, resample       // optional filters
+            });
+            // res.points is already merged on timestamp with keys like `${id}:var`
+          } else if (selectedStations.length === 1) {
+            const rec = await getDataOnce(selectedStations[0]);
+            // build series like before from rec.points
+          }
+          try {
+            const ids = [...new Set(stationIds)];
+            const recs = await Promise.all(ids.map(id => getDataOnce(id, { ttlMs, useETag: true })));
+            if (cancelled) return;
+  
+            const map: Record<string, DataRecord> = {};
+            ids.forEach((id, i) => { map[id] = recs[i]; });
+            setDataById(map);
+  
+            // discover all numeric variables across all stations; exclude 'timestamp'
+            const varSet = new Set<string>();
+            for (const r of Object.values(map)) {
+              for (const p of (r.points ?? [])) {
+                for (const [k, v] of Object.entries(p)) {
+                  if (k === 'timestamp') continue;
+                  if (typeof v === 'number' && Number.isFinite(v)) varSet.add(k);
+                }
+              }
+            }
+            const all = [...varSet].sort();
+            setSelectedVars(all); // default to all vars
+            setSelectedStations(ids); // default to all stations
+          } catch (e: any) {
+            setErr(String(e?.message ?? e));
+          } finally {
+            if (!cancelled) setLoading(false);
+          }
+        })();
 
     return () => { cancelled = true; };
   }, [stationIds, ttlMs]);
