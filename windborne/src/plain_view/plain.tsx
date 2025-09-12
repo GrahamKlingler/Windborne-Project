@@ -287,7 +287,6 @@ export default function Plain({
       {showMulti && selectedIds.length > 0 && (
         <MultiStationDialog
           stationIds={selectedIds}
-          makeUrl={makePointsUrl}
           onClose={() => setShowMulti(false)}
         />
       )}
