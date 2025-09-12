@@ -5,6 +5,10 @@
   text-align: center;
 }
 
+::-webkit-scrollbar {
+  display: none;
+}
+
 /* Fill the screen */
 .app-root {
   position: relative;
