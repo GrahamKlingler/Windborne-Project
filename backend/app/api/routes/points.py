@@ -1,20 +1,20 @@
 from fastapi import APIRouter, Query
+import json, hashlib
 from app.core.cache import cached_json
 from app.core.config import settings
 from app.services.upstream import fetch_station_raw
 from app.services.series import build_slice
-import json, hashlib
+from app.schemas.points import PointsResponse
 
 router = APIRouter(prefix="/stations", tags=["points"])
 
-@router.get("/{station_id}/points")
+@router.get("/{station_id}/points", response_model=PointsResponse)
 async def station_points(station_id: str,
-                         start: str|None = None,
-                         end: str|None = None,
-                         vars: str|None = Query(None),
-                         resample: str|None = Query(None)):
+                         start: str | None = None,
+                         end: str | None = None,
+                         vars: str | None = Query(None, description="comma-separated variables"),
+                         resample: str | None = Query(None, description="e.g., 1h, 15min, 1d")):
     vlist = [v.strip() for v in (vars or "").split(",") if v.strip()] or None
-    # cache key for computed slice
     key = "slice:" + hashlib.md5(f"{station_id}|{start}|{end}|{vlist}|{resample}".encode()).hexdigest()
 
     async def loader():

@@ -16,7 +16,7 @@ class CompareReq(BaseModel):
     end: Optional[str] = None
     resample: Optional[str] = None
 
-@router.post("")
+@router.post("", response_model=dict)
 async def compare(req: CompareReq):
     ids_sorted = sorted(set(req.stationIds))
     key = "cmp:" + hashlib.md5(
@@ -28,13 +28,14 @@ async def compare(req: CompareReq):
         for sid in ids_sorted:
             raw = await fetch_station_raw(sid)
             out = build_slice(json.loads(raw), req.start, req.end, req.vars, req.resample)
-            df = pd.DataFrame(out["points"])
-            if df.empty: continue
+            df = pd.DataFrame(out["points"]) if out["points"] else pd.DataFrame(columns=["timestamp"])
+            if df.empty:
+                continue
             df = df.rename(columns={c: f"{sid}:{c}" for c in df.columns if c != "timestamp"})
             frames.append(df)
 
         if not frames:
-            return {"points": [], "points_count": 0, "ids": ids_sorted}
+            return {"ids": ids_sorted, "points": [], "points_count": 0}
 
         merged = frames[0]
         for f in frames[1:]:

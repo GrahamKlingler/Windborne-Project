@@ -1,6 +1,6 @@
 # Windborne Backend Scaffold
 
-A FastAPI backend with Redis caching for station search, single-station slices, and multi-station compare. Ships with request coalescing, ETag revalidation, and row-wise normalization.
+A FastAPI backend with Redis caching for station search, single-station slices, and multi-station compare. Ships with request coalescing, ETag revalidation, and row-wise normalization compatible with your frontend.
 
 ## Quickstart
 
